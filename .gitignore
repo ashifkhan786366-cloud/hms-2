@@ -1,0 +1,36 @@
+# Hospital Management System - Git Ignore
+
+# Configuration files with sensitive data
+config/db.php
+
+# Upload folder (patient photos - sensitive data)
+uploads/*
+!uploads/.gitkeep
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Log Files
+*.log
+error_log
+
+# PHP cache
+*.cache
+
+# Temp files
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+.env.production

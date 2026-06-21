@@ -1,0 +1,1 @@
+<?php error_reporting(E_ALL); ini_set(" display_errors\, 1); require \c:/Users/ok/.gemini/antigravity/playground/ultraviolet-singularity/hms/config/db.php\; try { $stmt = $pdo->query(\SHOW TABLES\); while($row = $stmt->fetch(PDO::FETCH_NUM)) { echo $row[0] . \\r\n\; } } catch (PDOException $e) { echo \Connection failed: \ . $e->getMessage(); }
