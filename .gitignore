@@ -1,43 +1,19 @@
-# Hospital Management System — Git Ignore
+# Hospital Management System - Git Ignore
 # =========================================
 
-# ── Sensitive Config (NEVER commit this) ──
-config/db.php
+# -- Sensitive Config (NEVER commit this) --
 accounting.config
 
-# ── Patient Photos (Private medical data) ──
+# -- Patient Photos (Private medical data) --
 uploads/*
 !uploads/.gitkeep
 
-# ── OS Files ──
+# -- OS Files --
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ── Editor Files ──
+# -- Editor Files --
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-
-# ── Log Files ──
-*.log
-error_log
-/logs/
-
-# ── PHP Cache ──
-*.cache
-
-# ── Temp Files ──
-*.tmp
-*.temp
-
-# ── Environment Files ──
-.env
-.env.local
-.env.production
-
-# ── Composer (if added later) ──
-/vendor/
-composer.lock
