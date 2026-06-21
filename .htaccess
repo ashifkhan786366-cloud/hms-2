@@ -1,0 +1,50 @@
+Options -Indexes
+DirectoryIndex index.php index.html
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Block access to sensitive files
+<FilesMatch "\.(sql|log|env|gitignore|json|toml|md|lock)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Allow railway.json and package files (needed for platform)
+<Files "railway.json">
+    Order Deny,Allow
+    Deny from all
+</Files>
+
+# Allow config/init_db.php only from localhost for security (comment out after setup)
+# <Files "init_db.php">
+#     Order Deny,Allow
+#     Allow from 127.0.0.1
+#     Deny from all
+# </Files>
+
+# PHP Settings
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 300
+    php_value memory_limit 256M
+    php_flag session.cookie_httponly on
+    php_flag session.cookie_secure off
+</IfModule>
+
+# Enable Rewrite Engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Don't rewrite existing files/directories
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+</IfModule>

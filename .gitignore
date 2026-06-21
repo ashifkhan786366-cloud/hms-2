@@ -1,7 +1,8 @@
 # Hospital Management System - Git Ignore
 
-# Configuration files with sensitive data
+# Configuration files with sensitive data (db.example.php is safe to commit)
 config/db.php
+accounting.config
 
 # Upload folder (patient photos - sensitive data)
 uploads/*

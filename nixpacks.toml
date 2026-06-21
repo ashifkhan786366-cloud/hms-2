@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["php81", "php81Extensions.pdo", "php81Extensions.pdo_mysql", "php81Extensions.mbstring", "php81Extensions.gd", "php81Extensions.curl", "php81Extensions.zip", "php81Extensions.intl", "apache"]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "apache2ctl -D FOREGROUND"

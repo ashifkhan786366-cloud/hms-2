@@ -1,40 +1,76 @@
 <?php
-// ============================================================
-// DATABASE CONFIGURATION - EXAMPLE FILE
-// ============================================================
-// Instructions:
-// 1. Is file ko copy karo: cp config/db.example.php config/db.php
-// 2. config/db.php mein apni values fill karo
-// 3. config/db.php KABHI bhi Git commit mat karo (already .gitignore mein hai)
-// ============================================================
+/**
+ * Database Configuration — EXAMPLE FILE
+ * =======================================
+ * Is file ko copy karke db.php banao:
+ *   cp config/db.example.php config/db.php
+ * 
+ * Phir db.php mein apni values update karo.
+ * db.php gitignored hai — sensitive data safe rahega.
+ * 
+ * ====================================================
+ * RAILWAY.APP DEPLOYMENT (Cloud):
+ * ====================================================
+ * Railway pe MySQL plugin add karne ke baad ye variables
+ * automatically set ho jaate hain — kuch karna nahi padta!
+ * 
+ *   MYSQL_HOST      → Railway auto-set karta hai
+ *   MYSQL_USER      → Railway auto-set karta hai
+ *   MYSQL_PASSWORD  → Railway auto-set karta hai
+ *   MYSQL_DATABASE  → Railway auto-set karta hai
+ *   MYSQL_PORT      → Railway auto-set karta hai
+ * 
+ * Optional Railway Variables (Dashboard > Variables mein add karo):
+ *   APP_ENV=production
+ *   DEBUG=false
+ *   INIT_TOKEN=your-secret-token-here   (for init_db.php security)
+ * 
+ * ====================================================
+ * LOCAL XAMPP SETUP:
+ * ====================================================
+ */
 
-define('DB_HOST', 'localhost');       // Your MySQL host
-define('DB_USER', 'root');            // Your MySQL username
-define('DB_PASS', '');                // Your MySQL password
-define('DB_NAME', 'hms_db');          // Database name (pehle create karo)
+// ── Local Development Values ──
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');
+define('DB_PASS', '');          // XAMPP default: empty password
+define('DB_NAME', 'hms_db');
+define('DB_PORT', '3306');
 
 try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo = new PDO(
+        "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        DB_USER,
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
 } catch (PDOException $e) {
-    die("ERROR: Database se connect nahi ho pa raha. " . $e->getMessage());
+    die("<div style='font-family:sans-serif;padding:20px;color:#c0392b;'>
+        <h2>⚠️ Database Connection Error</h2>
+        <p>MySQL se connect nahi ho pa raha. Check karo:</p>
+        <ul>
+            <li>XAMPP mein MySQL start hai?</li>
+            <li>Database <strong>" . DB_NAME . "</strong> exist karta hai?</li>
+            <li>Username/Password sahi hai?</li>
+        </ul>
+        <small>Error: " . htmlspecialchars($e->getMessage()) . "</small>
+    </div>");
 }
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-// App Configuration - Apni hospital ki details yahan update karo
-define('APP_NAME', 'YOUR HOSPITAL NAME HERE');
-define('APP_SHORT_NAME', 'YOUR HOSPITAL SHORT NAME');
-define('APP_ADDRESS', 'Your Full Address Here');
-define('APP_PHONE', '9999999999');
-define('APP_EMAIL', 'youremail@hospital.com');
-define('APP_LOGO', 'assets/logo.png');
-define('CURRENCY', '₹');
-define('PRIMARY_COLOR', '#0066CC');
-define('SECONDARY_COLOR', '#2C2C2C');
-define('HEADER_FONT', "'Roboto', Arial, sans-serif");
+// App Config (ye change mat karo — db.php mein karo)
+define('APP_NAME',       'SANKHLA HOSPITAL HEART & TRUMA CENTER');
+define('APP_SHORT_NAME', 'SANKHLA HOSPITAL');
+define('APP_ADDRESS',    'GOVT. DISS.NEAR KANJI PETROL PUMP,NEWARU ROAD,JHOTWARA,JAIPUR');
+define('APP_PHONE',      '9829208462');
+define('APP_EMAIL',      'bksankhlahospital@gmail.com');
+define('APP_LOGO',       'assets/logo.png');
+define('CURRENCY',       '₹');
+define('PRIMARY_COLOR',  '#0066CC');
+define('SECONDARY_COLOR','#2C2C2C');
+define('HEADER_FONT',    "'Roboto', Arial, sans-serif");
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
