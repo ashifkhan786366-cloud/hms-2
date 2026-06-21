@@ -1,18 +1,16 @@
 FROM php:8.1-apache
 
-# ── Install only what HMS strictly needs ──
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+# ── Install system dependencies with retry logic ──
+RUN set -eux; \
+    apt-get update -y; \
+    apt-get install -y --no-install-recommends \
         libzip-dev \
         zip \
-        unzip \
-    && docker-php-ext-install \
-        pdo \
-        pdo_mysql \
-        mysqli \
-        mbstring \
-        zip \
-    && rm -rf /var/lib/apt/lists/*
+        unzip; \
+    rm -rf /var/lib/apt/lists/*
+
+# ── Install PHP extensions ──
+RUN docker-php-ext-install pdo pdo_mysql mysqli zip
 
 # ── Enable Apache mod_rewrite ──
 RUN a2enmod rewrite headers
