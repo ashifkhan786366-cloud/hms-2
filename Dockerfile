@@ -1,13 +1,14 @@
 FROM php:8.1-apache
 
-# ── System dependencies ──
+# ── System dependencies (Debian Bookworm compatible) ──
 RUN apt-get update && apt-get install -y \
     libpng-dev \
-    libjpeg62-turbo-dev \
-    libfreetype6-dev \
+    libjpeg-dev \
+    libfreetype-dev \
     libzip-dev \
     zip \
     unzip \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── PHP Extensions ──
@@ -20,37 +21,32 @@ RUN docker-php-ext-configure gd \
         mysqli \
         gd \
         mbstring \
-        zip \
-        intl \
-        exif
+        zip
 
 # ── Enable Apache modules ──
-RUN a2enmod rewrite headers expires deflate
+RUN a2enmod rewrite headers
 
 # ── Apache Configuration ──
 COPY apache.conf /etc/apache2/sites-available/000-default.conf
 RUN a2ensite 000-default
 
-# ── PHP Configuration for Production ──
-RUN echo "upload_max_filesize = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "post_max_size = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "session.cookie_httponly = 1" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "session.use_strict_mode = 1" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "expose_php = Off" >> /usr/local/etc/php/conf.d/custom.ini
+# ── PHP Production Settings ──
+RUN { \
+    echo 'upload_max_filesize = 10M'; \
+    echo 'post_max_size = 10M'; \
+    echo 'max_execution_time = 300'; \
+    echo 'memory_limit = 256M'; \
+    echo 'session.cookie_httponly = 1'; \
+    echo 'expose_php = Off'; \
+} > /usr/local/etc/php/conf.d/custom.ini
 
 # ── Copy Application Files ──
 COPY . /var/www/html/
 
-# ── Set Permissions ──
+# ── Permissions ──
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
-    && chmod -R 775 /var/www/html/uploads \
-    && find /var/www/html -name "*.php" -exec chmod 644 {} \;
-
-# ── Remove sensitive local config if exists ──
-RUN rm -f /var/www/html/config/db.php.local
+    && chmod -R 775 /var/www/html/uploads
 
 EXPOSE 80
 
