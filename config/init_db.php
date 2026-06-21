@@ -2,14 +2,15 @@
 /**
  * Database Initialization Script
  * ================================
- * Ye script Railway pe pehli baar run karo — sab tables + demo data create ho jaayenge.
+ * Render.com pe deploy hone ke baad ek baar ye URL visit karo:
  * 
- * URL: https://your-app.up.railway.app/config/init_db.php
+ * URL: https://hms-sankhla.onrender.com/config/init_db.php?token=hms-sankhla-init-2024
  * 
- * IMPORTANT: Ek baar setup ke baad, is file ka naam badal do ya delete kar do for security.
+ * Ye script db4free.net MySQL mein sab tables + demo data create karega.
+ * IMPORTANT: Setup ke baad is file ko delete kar do (security ke liye).
  */
 
-// Security: Simple token check (change this token!)
+// Security: Token check
 $secret = $_GET['token'] ?? '';
 $expected_token = getenv('INIT_TOKEN') ?: 'hms-setup-2024';
 

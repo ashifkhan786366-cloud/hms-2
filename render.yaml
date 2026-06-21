@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: hms-sankhla
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /login.php
+    autoDeploy: true
+    envVars:
+      # ── db4free.net MySQL (Permanent Free Database) ──
+      - key: DB_HOST
+        value: db4free.net
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        value: hms123321
+      - key: DB_USER
+        value: hms123321
+      - key: DB_PASS
+        value: 123321000
+      # ── App Settings ──
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: INIT_TOKEN
+        value: hms-sankhla-init-2024
