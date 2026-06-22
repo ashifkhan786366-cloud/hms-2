@@ -1,24 +1,22 @@
-FROM php:8.1-apache
+FROM php:8.2-apache
 
-# ── Install system dependencies with retry logic ──
-RUN set -eux; \
-    apt-get update -y; \
-    apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         libzip-dev \
-        zip \
-        unzip; \
-    rm -rf /var/lib/apt/lists/*
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# ── Install PHP extensions ──
-RUN docker-php-ext-install pdo pdo_mysql mysqli zip
+# Install PHP extensions: pdo_pgsql for Aiven PostgreSQL + pdo_mysql for local dev + zip
+RUN docker-php-ext-install pdo pdo_pgsql pgsql pdo_mysql mysqli zip
 
-# ── Enable Apache mod_rewrite ──
+# Enable Apache rewrite module
 RUN a2enmod rewrite headers
 
-# ── Apache Config ──
+# Copy Apache virtual host config
 COPY apache.conf /etc/apache2/sites-available/000-default.conf
 
-# ── PHP Settings ──
+# PHP runtime settings
 RUN { \
     echo 'upload_max_filesize = 10M'; \
     echo 'post_max_size = 10M'; \
@@ -28,12 +26,13 @@ RUN { \
     echo 'expose_php = Off'; \
 } > /usr/local/etc/php/conf.d/hms.ini
 
-# ── Copy App ──
+# Copy application files
 COPY . /var/www/html/
 
-# ── Permissions ──
+# Fix permissions
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html \
+    && find /var/www/html -type d -exec chmod 755 {} \; \
+    && find /var/www/html -type f -exec chmod 644 {} \; \
     && chmod 775 /var/www/html/uploads
 
 EXPOSE 80

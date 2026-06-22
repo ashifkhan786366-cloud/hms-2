@@ -8,17 +8,18 @@ services:
     healthCheckPath: /login.php
     autoDeploy: true
     envVars:
-      # ── db4free.net MySQL (Permanent Free Database) ──
+      # ── Aiven PostgreSQL ──
+      # Set these in Render Dashboard > Environment (not here for security)
       - key: DB_HOST
-        value: db4free.net
+        sync: false
       - key: DB_PORT
-        value: "3306"
+        sync: false
       - key: DB_NAME
-        value: hms123321
+        sync: false
       - key: DB_USER
-        value: hms123321
+        sync: false
       - key: DB_PASS
-        value: 123321000
+        sync: false
       # ── App Settings ──
       - key: APP_ENV
         value: production
