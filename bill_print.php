@@ -1,342 +1,425 @@
 <?php
+// file: /bill_print.php
 require_once 'config/db.php';
+require_once 'controllers/TemplateController.php';
+require_once 'controllers/BillController.php';
 
-if (!isset($_GET['id']))
-    die("Invalid Request");
-$id = $_GET['id'];
-
-// Get Bill Info & Patient Details
-$stmt = $pdo->prepare("SELECT b.*, p.full_name, p.address, p.mr_number, p.age, p.gender, p.phone FROM bills b JOIN patients p ON b.patient_id = p.id WHERE b.id = ?");
-$stmt->execute([$id]);
-$bill = $stmt->fetch();
-
-if (!$bill)
-    die("Bill not found");
-
-// Get Items
-$istmt = $pdo->prepare("SELECT * FROM bill_items WHERE bill_id = ?");
-$istmt->execute([$id]);
-$items = $istmt->fetchAll();
-
-// Get Doctor details if this is an appointment/IPD bill
-$doctor_name = "";
-if(!empty($bill['appointment_id'])) {
-    $dstmt = $pdo->prepare("SELECT u.full_name FROM appointments a JOIN users u ON a.doctor_id = u.id WHERE a.id = ?");
-    $dstmt->execute([$bill['appointment_id']]);
-    $doc = $dstmt->fetch();
-    if($doc) $doctor_name = $doc['full_name'];
-} elseif(!empty($bill['ipd_admission_id'])) {
-    $dstmt = $pdo->prepare("SELECT u.full_name FROM ipd_admissions i JOIN users u ON i.doctor_id = u.id WHERE i.id = ?");
-    $dstmt->execute([$bill['ipd_admission_id']]);
-    $doc = $dstmt->fetch();
-    if($doc) $doctor_name = $doc['full_name'];
+$bill_id = $_GET['id'] ?? null;
+if (!$bill_id) {
+    die("Invalid Bill ID");
 }
 
-$admission_date = "";
-$discharge_date = "";
-if(!empty($bill['ipd_admission_id'])) {
-     $istmt2 = $pdo->prepare("SELECT admission_date, discharge_date FROM ipd_admissions WHERE id = ?");
-     $istmt2->execute([$bill['ipd_admission_id']]);
-     $ipd = $istmt2->fetch();
-     if($ipd) {
-         $admission_date = date('d-m-Y', strtotime($ipd['admission_date']));
-         if($ipd['discharge_date']) {
-             $discharge_date = date('d-m-Y', strtotime($ipd['discharge_date']));
-         }
-     }
+$templateCtrl = new TemplateController($pdo);
+$billCtrl = new BillController($pdo);
+
+$settings = $templateCtrl->getSettings(1); // Hospital ID 1
+$billResult = $billCtrl->getBillData($bill_id);
+
+if (!$billResult || !$billResult['bill']) {
+    die("Bill not found.");
 }
 
+$bill = $billResult['bill'];
+$grouped_items = $billResult['groups'];
+$partitions = $billCtrl->getPartitions();
+
+// ── FIX 1: Robust bill date — check multiple column names ────
+$_rawDate = $bill['bill_date']
+         ?? $bill['created_at']
+         ?? $bill['date']
+         ?? null;
+// Fallback to today if null or empty
+$_billTimestamp = (!empty($_rawDate)) ? strtotime($_rawDate) : time();
+// If strtotime() returned false (bad string), fall back to now
+if ($_billTimestamp === false || $_billTimestamp <= 0) $_billTimestamp = time();
+$bill['_display_date'] = date('d-M-Y', $_billTimestamp);
+$bill['_display_time'] = date('h:i A', $_billTimestamp);
+
+// PDF Download Logic Using mPDF
+if (isset($_GET['download']) && $_GET['download'] === 'pdf') {
+    // Only executed if mpdf is installed via composer
+    if (file_exists('vendor/autoload.php')) {
+        require_once 'vendor/autoload.php';
+        try {
+            ob_start();
+            renderBillHTML(true); // render without UI chrome
+            $html = ob_get_clean();
+            
+            $mpdf = new \Mpdf\Mpdf();
+            $mpdf->WriteHTML($html);
+            $mpdf->Output("Bill_".$bill['bill_number'].".pdf", \Mpdf\Output\Destination::DOWNLOAD);
+            exit;
+        } catch (\Mpdf\MpdfException $e) {
+            die("PDF Generation Error: " . $e->getMessage());
+        }
+    } else {
+        die("mPDF library not found. Run 'composer require mpdf/mpdf' in project root.");
+    }
+}
+
+// Inline Helper to separate HTML render logic for PDF vs Browser
+function renderBillHTML($is_pdf = false) {
+    global $settings, $bill, $grouped_items, $partitions;
+    
+    // Fallback template defaults
+    $font_family = $settings['font_family'] ?? 'Arial, sans-serif';
+    $primary_color = $settings['primary_color'] ?? '#0056b3';
+    $secondary_color = $settings['secondary_color'] ?? '#6c757d';
+    $logo_path = $settings['logo_path'] ?? '';
+    $header_text = $settings['header_text'] ?? '';
+    $footer_text = $settings['footer_text'] ?? '';
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Invoice - <?php echo htmlspecialchars($bill['bill_number']); ?></title>
+        <style>
+            body {
+                font-family: <?php echo htmlspecialchars($font_family); ?>;
+                color: #333;
+                background: #fff;
+                margin: 0;
+                padding: <?php echo $is_pdf ? '0' : '20px'; ?>;
+            }
+            .bill-container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: #fff;
+            }
+            .header-sec {
+                display: flex;
+                align-items: center;
+                border-bottom: 2px solid <?php echo htmlspecialchars($primary_color); ?>;
+                padding-bottom: 15px;
+                margin-bottom: 20px;
+            }
+            .header-logo {
+                max-width: 150px;
+                max-height: 80px;
+                margin-right: 20px;
+                <?php if ($is_pdf) echo 'float: left;'; ?>
+            }
+            .header-content {
+                flex-grow: 1;
+                <?php if ($is_pdf) echo 'float: left; width: 70%; padding-left: 20px;'; ?>
+            }
+            /* ── FIX 2: Professional Patient Header ── */
+            .patient-header-block {
+                border: 2px solid <?php echo htmlspecialchars($primary_color); ?>;
+                border-radius: 6px;
+                overflow: hidden;
+                margin-bottom: 18px;
+                font-family: <?php echo htmlspecialchars($font_family); ?>;
+            }
+            .ph-top {
+                background: <?php echo htmlspecialchars($primary_color); ?>;
+                color: #fff;
+                padding: 8px 14px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .ph-patient-name {
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+            .ph-invoice-badge {
+                background: rgba(255,255,255,0.22);
+                border: 1px solid rgba(255,255,255,0.5);
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                white-space: nowrap;
+            }
+            .ph-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr 1fr;
+                background: #f8fafc;
+                border-top: 1px solid #dce3ea;
+            }
+            .ph-cell {
+                padding: 7px 12px;
+                border-right: 1px solid #dce3ea;
+                border-bottom: 1px solid #dce3ea;
+            }
+            .ph-cell:last-child { border-right: none; }
+            .ph-cell .ph-key {
+                font-size: 10px;
+                text-transform: uppercase;
+                font-weight: 700;
+                color: #7a8595;
+                letter-spacing: 0.4px;
+                margin-bottom: 2px;
+            }
+            .ph-cell .ph-val {
+                font-size: 13px;
+                font-weight: 600;
+                color: #1a2332;
+            }
+            .ph-cell .ph-val.highlight {
+                color: <?php echo htmlspecialchars($primary_color); ?>;
+                font-size: 14px;
+            }
+            .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+            }
+            .items-table th {
+                background-color: <?php echo htmlspecialchars($primary_color); ?>;
+                color: #fff;
+                padding: 10px;
+                text-align: left;
+                border: 1px solid #ccc;
+            }
+            .items-table td {
+                padding: 8px 10px;
+                border: 1px solid #ccc;
+            }
+            .partition-heading td {
+                background-color: <?php echo htmlspecialchars($secondary_color); ?>;
+                color: #fff;
+                font-size: 14px;
+            }
+            .partition-subtotal {
+                background-color: #f9f9f9;
+                font-weight: bold;
+                text-align: right;
+            }
+            .grand-total {
+                background-color: <?php echo htmlspecialchars($primary_color); ?>;
+                color: #fff;
+                font-weight: bold;
+                text-align: right;
+            }
+            .footer-sec {
+                border-top: 1px dashed <?php echo htmlspecialchars($secondary_color); ?>;
+                padding-top: 15px;
+                text-align: center;
+                font-size: 13px;
+                margin-top: 40px;
+            }
+            
+            <?php if (!$is_pdf && !empty($settings['watermark_path']) && $settings['show_watermark'] == 1): ?>
+            .bill-container::before {
+                content: "";
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background-image: url('<?php echo htmlspecialchars($settings['watermark_path']); ?>');
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: 50%;
+                opacity: 0.1;
+                z-index: -1;
+                pointer-events: none;
+            }
+            <?php endif; ?>
+
+            .ui-chrome {
+                background: #f1f3f5;
+                padding: 15px;
+                text-align: right;
+                border-bottom: 1px solid #ccc;
+                margin-bottom: 20px;
+            }
+            .btn {
+                padding: 10px 20px;
+                color: #fff;
+                text-decoration: none;
+                border-radius: 4px;
+                margin-left: 10px;
+                font-weight: bold;
+                border: none;
+                cursor: pointer;
+            }
+            .btn-print { background: #007bff; }
+            .btn-pdf { background: #dc3545; }
+            .btn-back { background: #6c757d; }
+            
+            @media print {
+                .ui-chrome { display: none !important; }
+                body { padding: 0; }
+                .bill-container { width: 100%; max-width: none; }
+            }
+        </style>
+    </head>
+    <body>
+        <?php if (!$is_pdf): ?>
+        <div class="ui-chrome no-print">
+            <button onclick="window.print()" class="btn btn-print">🖨 Print Bill</button>
+            <a href="?id=<?php echo $bill['id']; ?>&download=pdf" class="btn btn-pdf">📄 Download PDF</a>
+            <a href="billing.php" class="btn btn-back">⬅ Back</a>
+        </div>
+        <?php endif; ?>
+
+        <div class="bill-container">
+            <!-- Header -->
+            <div class="header-sec">
+                <?php if ($logo_path): ?>
+                    <img src="<?php echo htmlspecialchars($logo_path); ?>" class="header-logo" alt="Logo">
+                <?php endif; ?>
+                <div class="header-content">
+                    <?php echo $header_text; ?>
+                </div>
+                <div style="clear: both;"></div>
+            </div>
+
+            <!-- FIX 2: Professional Patient Info Header -->
+            <div class="patient-header-block">
+                <!-- Top bar: Patient name (left) + Invoice badge (right) -->
+                <div class="ph-top">
+                    <div class="ph-patient-name">
+                        <?php echo htmlspecialchars($bill['full_name'] ?? 'Unknown Patient'); ?>
+                    </div>
+                    <div class="ph-invoice-badge">
+                        📄 <?php echo htmlspecialchars($bill['bill_number']); ?>
+                    </div>
+                </div>
+                <!-- 4-column info grid -->
+                <div class="ph-grid">
+                    <div class="ph-cell">
+                        <div class="ph-key">UHID / MR No</div>
+                        <div class="ph-val highlight"><?php echo htmlspecialchars($bill['mr_number'] ?? '—'); ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Age / Gender</div>
+                        <div class="ph-val"><?php echo htmlspecialchars($bill['age'] ?? '—') . ' Yr / ' . strtoupper(htmlspecialchars($bill['gender'] ?? '—')); ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Contact</div>
+                        <div class="ph-val"><?php echo htmlspecialchars($bill['phone'] ?? '—'); ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Bill Type</div>
+                        <div class="ph-val"><?php echo htmlspecialchars($bill['bill_type'] ?? $bill['payment_status'] ?? 'OPD'); ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Bill Date</div>
+                        <div class="ph-val"><?php echo $bill['_display_date']; ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Bill Time</div>
+                        <div class="ph-val"><?php echo $bill['_display_time']; ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Payment Mode</div>
+                        <div class="ph-val"><?php echo htmlspecialchars($bill['payment_method'] ?? '—'); ?></div>
+                    </div>
+                    <div class="ph-cell">
+                        <div class="ph-key">Payment Status</div>
+                        <div class="ph-val"><?php echo htmlspecialchars($bill['payment_status'] ?? '—'); ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Partitioned Grid Phase 3 -->
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th width="5%">Sr.</th>
+                        <th width="55%">Description of Service / Item</th>
+                        <th width="10%">Qty</th>
+                        <th width="15%">Rate</th>
+                        <th width="15%">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $grandTotal = 0;
+                    $serial = 1;
+
+                    // Display matched partitions ordered by DB sort_order
+                    foreach ($partitions as $part) {
+                        $key = $part['partition_key'];
+                        $label = $part['label'];
+                        $showSubtotal = $part['sub_total_visible'];
+
+                        if (isset($grouped_items[$key]) && count($grouped_items[$key]['items']) > 0) {
+                            $group = $grouped_items[$key];
+                            
+                            // Partition Heading
+                            echo '<tr class="partition-heading">';
+                            echo '<td colspan="5"><strong>' . htmlspecialchars($label) . '</strong></td>';
+                            echo '</tr>';
+
+                            // Items
+                            foreach ($group['items'] as $item) {
+                                echo '<tr>';
+                                echo '<td>' . $serial++ . '</td>';
+                                echo '<td>' . strtoupper(htmlspecialchars($item['service_name'])) . '</td>';
+                                echo '<td>' . htmlspecialchars($item['quantity']) . '</td>';
+                                echo '<td>' . number_format($item['cost'], 2) . '</td>';
+                                echo '<td>' . number_format($item['amount'], 2) . '</td>';
+                                echo '</tr>';
+                            }
+
+                            // Subtotal
+                            if ($showSubtotal) {
+                                echo '<tr class="partition-subtotal">';
+                                echo '<td colspan="4">SUB-TOTAL — ' . htmlspecialchars($label) . '</td>';
+                                echo '<td>₹' . number_format($group['subtotal'], 2) . '</td>';
+                                echo '</tr>';
+                            }
+                            
+                            $grandTotal += $group['subtotal'];
+                        }
+                    }
+
+                    // Display 'OTHER' if any items did not map to active partitions
+                    if (isset($grouped_items['OTHER']) && count($grouped_items['OTHER']['items']) > 0) {
+                        $group = $grouped_items['OTHER'];
+                        echo '<tr class="partition-heading">';
+                        echo '<td colspan="5"><strong>HOSPITAL OTHER CHARGES</strong></td>';
+                        echo '</tr>';
+
+                        foreach ($group['items'] as $item) {
+                            echo '<tr>';
+                            echo '<td>' . $serial++ . '</td>';
+                            echo '<td>' . strtoupper(htmlspecialchars($item['service_name'])) . '</td>';
+                            echo '<td>' . htmlspecialchars($item['quantity']) . '</td>';
+                            echo '<td>' . number_format($item['cost'], 2) . '</td>';
+                            echo '<td>' . number_format($item['amount'], 2) . '</td>';
+                            echo '</tr>';
+                        }
+                        echo '<tr class="partition-subtotal">';
+                        echo '<td colspan="4">SUB-TOTAL — HOSPITAL OTHER CHARGES</td>';
+                        echo '<td>₹' . number_format($group['subtotal'], 2) . '</td>';
+                        echo '</tr>';
+                        
+                        $grandTotal += $group['subtotal'];
+                    }
+                    ?>
+                    
+                    <!-- Taxes and Discount (if applicable) -->
+                    <?php if ($bill['discount'] > 0): ?>
+                    <tr class="partition-subtotal" style="color:#d9534f;">
+                        <td colspan="4">DISCOUNT</td>
+                        <td>-₹<?php echo number_format($bill['discount'], 2); ?></td>
+                    </tr>
+                    <?php endif; ?>
+
+                    <tr class="grand-total">
+                        <td colspan="4">NET PAYABLE AMOUNT</td>
+                        <td>₹<?php echo number_format($bill['net_amount'], 2); ?></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Footer -->
+            <div class="footer-sec">
+                <?php echo $footer_text; ?>
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
+}
+
+// Call the renderer for web preview
+renderBillHTML(false);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Invoice - <?php echo $bill['bill_number']; ?></title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #fff;
-            color: #000;
-        }
-        .print-container {
-            width: 800px;
-            margin: 0 auto;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-        th, td {
-            border: 1px solid #000;
-            padding: 4px 6px;
-        }
-        .header-title {
-            text-align: center;
-            font-size: 24px;
-            font-weight: bold;
-            padding: 10px 0;
-            border-bottom: 2px solid #000;
-            border-top: 2px solid #000;
-            border-left: 2px solid #000;
-            border-right: 2px solid #000;
-        }
-        .sub-header-table td {
-            border-bottom: 0;
-            border-top: 0;
-        }
-        .sub-header-table {
-            border-bottom: 2px solid #000;
-            border-top: 0;
-        }
-        .border-bottom { border-bottom: 1px solid #000 !important; }
-        .no-border-bottom { border-bottom: none !important; }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
-        .fw-bold { font-weight: bold; }
-        
-        .patient-table td {
-            border-top: 0;
-            border-bottom: 0;
-            border-left: 0;
-            border-right: 0;
-            padding: 2px 6px;
-        }
-        
-        .items-heading {
-            background-color: #dbeecd !important; /* Light greenish color from the requested image */
-            font-weight: bold;
-            -webkit-print-color-adjust: exact;
-            color-adjust: exact;
-        }
-        
-        .totals-bg-blue {
-            background-color: #9dc3e6 !important; /* Light blue from the requested image */
-            -webkit-print-color-adjust: exact;
-            color-adjust: exact;
-        }
-        .totals-bg-red {
-            background-color: #fce4d6 !important; /* Light reddish/orange from requested image */
-            -webkit-print-color-adjust: exact;
-            color-adjust: exact;
-        }
-        
-        @media print {
-            .no-print { display: none; }
-            body { padding: 0; margin: 0; }
-            .print-container { width: 100%; margin: 0; padding: 0; }
-        }
-        
-        .btn-print {
-            background: #007bff; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; margin: 10px;
-        }
-        .btn-back {
-            background: #6c757d; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; margin: 10px; text-decoration: none;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="no-print" style="text-align: right; background: #f8f9fa; padding: 10px; border-bottom: 1px solid #ddd;">
-        <button onclick="window.print()" class="btn-print">🖨 Print Invoice</button>
-        <a href="billing.php" class="btn-back">⬅ Back</a>
-    </div>
-
-    <div class="print-container">
-        <table>
-            <tr>
-                <td colspan="10" class="header-title" style="border-bottom: 0; padding-bottom: 2px;">Sankhla Hospital Heart & Trauma Center</td>
-            </tr>
-            <tr>
-                <td colspan="5" style="border-right: 0; border-top: 1px solid #000; border-bottom: 0;">
-                    <div>Powered by Vitaid Health Care Foundation</div>
-                    <div>Reg. No. U86100RJ2023NPL086879</div>
-                </td>
-                <td colspan="5" class="text-right" style="border-left: 0; border-top: 1px solid #000; border-bottom: 0;">
-                    <div>Phone: <?php echo APP_PHONE ?? '9829208462'; ?></div>
-                    <div>Email: <?php echo APP_EMAIL ?? 'bksankhlahospital@gmail.com'; ?></div>
-                </td>
-            </tr>
-            <tr>
-                <td colspan="10" style="border-top: 0; border-bottom: 2px solid #000; font-weight: bold;">
-                    TAX INVOICE / BILL OF SUPPLY / CASH MEMO
-                </td>
-            </tr>
-            
-            <!-- Invoice No and Date -->
-            <tr>
-                <td colspan="1" style="border-right: 0; border-bottom: 0;">Invoice No.</td>
-                <td colspan="4" style="border-left: 0; border-bottom: 0;"><?php echo $bill['bill_number']; ?></td>
-                
-                <td colspan="2" class="text-right fw-bold" style="border-right:0; border-bottom: 0; font-size: 16px;">Date</td>
-                <td colspan="3" class="text-center fw-bold" style="border-left:0; border-bottom: 0; font-size: 22px;"><?php echo date('d-m-y', strtotime($bill['bill_date'])); ?></td>
-            </tr>
-            
-            <!-- Extra blank row as shown in the image -->
-            <tr>
-                <td colspan="10" style="border-top: 0;border-bottom:0; height: 10px;"></td>
-            </tr>
-
-            <!-- Patient Details Area -->
-            <tr>
-                <td colspan="10" style="padding: 0; border-top: 0; border-bottom: 0;">
-                    <table class="patient-table">
-                        <tr>
-                            <td style="width: 25%;">Patient Name</td>
-                            <td style="width: 75%;"><?php echo strtoupper($bill['full_name']); ?></td>
-                        </tr>
-                        <tr>
-                            <td>Age / Gender</td>
-                            <td><?php echo $bill['age']; ?>/<?php echo strtoupper($bill['gender']); ?></td>
-                        </tr>
-                        <tr>
-                            <td>Contact No.</td>
-                            <td><?php echo $bill['phone']; ?></td>
-                        </tr>
-                        <tr>
-                            <td>UHID / OPD No. / IPD No.</td>
-                            <td><?php echo $bill['mr_number']; ?></td>
-                        </tr>
-                        <tr>
-                            <td>Doctor</td>
-                            <td><?php echo strtoupper($doctor_name); ?></td>
-                        </tr>
-                        <tr>
-                            <td>Admission Date (if IPD)</td>
-                            <td><?php echo $admission_date; ?></td>
-                        </tr>
-                        <tr>
-                            <td>Discharge Date (if IPD)</td>
-                            <td><?php echo $discharge_date; ?></td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Extra blank row -->
-            <tr>
-                <td colspan="10" style="border-top: 0; height: 10px;"></td>
-            </tr>
-            
-            <!-- Items Header -->
-            <tr class="items-heading">
-                <td style="width: 5%;">Sr</td>
-                <td colspan="3" style="width: 45%;">Particulars / Service / Item Description</td>
-                <td style="width: 5%;">Qty</td>
-                <td style="width: 10%;">Rate</td>
-                <td style="width: 12%;">Amount</td>
-                <td style="width: 10%;">Du add</td>
-                <td colspan="2" style="width: 13%;">due</td>
-            </tr>
-            
-            <!-- Items Generation -->
-            <?php 
-            $rowCount = 0;
-            $maxRows = 14; 
-            $totalItemsFound = 0;
-            
-            foreach ($items as $i => $item): 
-                $rowCount++;
-                $totalItemsFound += $item['quantity'];
-            ?>
-                <tr>
-                    <td><?php echo $i + 1; ?></td>
-                    <td colspan="3"><?php echo strtoupper($item['service_name']); ?></td>
-                    <td class="text-right"><?php echo $item['quantity']; ?></td>
-                    <td class="text-right"><?php echo round($item['cost']); ?></td>
-                    <td class="text-right"><?php echo round($item['amount']); ?></td>
-                    <td></td>
-                    <td colspan="2"></td>
-                </tr>
-            <?php endforeach; ?>
-            
-            <!-- Fill empty rows to match layout -->
-            <?php for($j = $rowCount + 1; $j <= $maxRows; $j++): ?>
-                <tr>
-                    <td><?php echo $j; ?></td>
-                    <td colspan="3"></td>
-                    <td></td>
-                    <td></td>
-                    <td class="text-right">0</td>
-                    <td></td>
-                    <td colspan="2"></td>
-                </tr>
-            <?php endfor; ?>
-            
-            <!-- Sum row before totals -->
-            <tr>
-                <td></td>
-                <td colspan="3"></td>
-                <td class="text-right"><?php echo $totalItemsFound > 0 ? $totalItemsFound : 9; ?></td>
-                <td></td>
-                <td class="text-right">0</td>
-                <td></td>
-                <td colspan="2"></td>
-            </tr>
-            
-            <!-- Totals Area -->
-            <tr class="totals-bg-blue">
-                <td colspan="6" class="text-center">Total Amount</td>
-                <td class="text-right"><?php echo round($bill['total_amount']); ?></td>
-                <td></td>
-                <td colspan="2"></td>
-            </tr>
-            
-            <tr>
-                <td colspan="4" class="text-center">Discount</td>
-                <td colspan="2" class="text-right totals-bg-red"><?php echo round($bill['discount'] > 0 ? ($bill['total_amount'] * ($bill['discount']/100)) : 20); ?></td>
-                <td class="text-right totals-bg-red"><?php echo round($bill['discount'] > 0 ? $bill['discount'] : 730); ?></td>
-                <td></td>
-                <td colspan="2"></td>
-            </tr>
-            
-            <tr class="totals-bg-blue">
-                <td colspan="6" class="text-center">NET AMOUNT PAYABLE</td>
-                <td class="text-right"><?php echo round($bill['net_amount']); ?></td>
-                <td></td>
-                <td colspan="2"></td>
-            </tr>
-            
-            <!-- Footer Terms and QR -->
-            <tr>
-                <td colspan="8" style="border-right: 0; border-bottom: 0;">
-                    <div style="margin-top: 10px;">Terms & Conditions :</div>
-                    <div>1. All payments in favour of "Sankhla Hospital Heart & Trauma Center" only.</div>
-                    <div>2. This is a computer generated bill, no signature required.</div>
-                    <div>3. Medicines / consumables once issued will not be returned or exchanged.</div>
-                    <div>4. Subject to Jaipur jurisdiction only.</div>
-                </td>
-                <td colspan="2" class="text-center" style="border-left: 0; border-bottom: 0; vertical-align: bottom;">
-                    <!-- Placeholder QR code mimicking image -->
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=SankhlaHospital" alt="QR Code" style="width: 100px; height: 100px;">
-                </td>
-            </tr>
-            <tr>
-                <td colspan="7" style="border-right: 0; border-top: 0; border-bottom: 0; padding-top: 15px;">
-                    Thank You for Choosing Sankhla Hospital
-                </td>
-                <td colspan="3" class="text-right" style="border-left: 0; border-top: 0; border-bottom: 0; padding-top: 15px;">
-                    SCAN FOR RATE US ON GMB
-                </td>
-            </tr>
-            <tr>
-                <td colspan="10" style="border-top: 0; border-bottom: 0;"> Get Well Soon! </td>
-            </tr>
-            
-            <!-- Bottom Address Bar text align center -->
-            <tr>
-                <td colspan="10" class="text-center fw-bold" style="border-top: 1px solid #000;">
-                    Govt. Dispensary Near Kanji Petrol Pump, Niwaru Road, Jhotwara, Jaipur - 302012
-                </td>
-            </tr>
-            
-        </table>
-    </div>
-
-</body>
-</html>

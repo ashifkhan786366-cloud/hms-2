@@ -1,17 +1,24 @@
 <?php
 require_once 'config/db.php';
+require_once 'includes/functions.php';
+
+$print_settings = get_print_settings($pdo, 'opd');
+
+require_once 'includes/functions.php';
+
+$print_settings = get_print_settings($pdo, 'opd');
+
 
 if (!isset($_GET['id']))
     die("Invalid Request");
 $id = $_GET['id']; // Appointment ID
 
-// Fetch Data
-$sql = "SELECT a.*, p.full_name, p.age, p.gender, p.mr_number, p.address as p_address, 
-        u.full_name as doctor_name, pr.diagnosis, pr.advice 
+// Fetch Data - Include Blood Group
+$sql = "SELECT a.*, p.full_name, p.age, p.gender, p.mr_number, p.phone as mobile, p.address as p_address,
+        u.full_name as doctor_name
         FROM appointments a 
         JOIN patients p ON a.patient_id = p.id 
         JOIN users u ON a.doctor_id = u.id 
-        LEFT JOIN prescriptions pr ON a.id = pr.appointment_id 
         WHERE a.id = ?";
 $stmt = $pdo->prepare($sql);
 $stmt->execute([$id]);
@@ -20,47 +27,127 @@ $data = $stmt->fetch();
 if (!$data)
     die("Appointment not found");
 
-// Fetch Medicines
-$med_stmt = $pdo->prepare("SELECT * FROM prescription_medicines WHERE prescription_id = (SELECT id FROM prescriptions WHERE appointment_id = ?)");
-$med_stmt->execute([$id]);
-$meds = $med_stmt->fetchAll();
+// Setup Variables for the print layout
+$patient_id = $data['mr_number'];
+$token_no = $data['token_number'];
+$name = strtoupper($data['full_name']);
+$gen = strtoupper($data['gender']); // Assuming 'Male' -> 'MALE'
+$age = $data['age'] . 'Y';
+$mobile = $data['mobile'];
+// Replace dashes with backslashes for the requested date format: 08\03\26
+$date = str_replace('-', '\\', date('d-m-y')); 
+// Ensure we don't have double 'Dr.' by replacing any existing 'DR. ' from the doctor name prefix
+$clean_doc_name = preg_replace('/^dr\.?\s*/i', '', $data['doctor_name']);
+$ref_by = "DR. " . strtoupper($clean_doc_name);
+$address_part = strtoupper(substr($data['p_address'], 0, 15)); // Truncating address if needed based on the image style
+$time = date('h:i A'); // Current system time
+$bp = $data['bp'] ?: '......./.......';
+$spo2 = '......'; // Placeholder as per image, add real data if required
+$plus = $data['pulse'] ?: '.......';
+$hight = '..............'; // Placeholder
+$waight = $data['weight'] ?: '..............';
+$blood_group = '..........'; // Blank space for doctor to fill in
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Prescription - <?php echo $data['full_name']; ?></title>
-    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    <title>OPD Slip - <?php echo $name; ?></title>
     <style>
-        body {
-            background: white;
-            font-family: 'Times New Roman', serif;
+        @page {
+            size: A4 portrait;
+            margin: 0;
         }
 
-        .header {
-            border-bottom: 3px solid #0066CC;
+        body {
+            font-family: <?php echo $print_settings['font_family']; ?>;
+            margin: 0;
+            padding: 0;
+            font-size: <?php echo $print_settings['font_size']; ?>px;
+            --primary-color: <?php echo $print_settings['primary_color']; ?>;
+        }
+
+        .print-container {
+            padding-top: <?php echo $print_settings['margin_top']; ?>px;
+            padding-bottom: <?php echo $print_settings['margin_bottom']; ?>px;
+            padding-left: <?php echo $print_settings['margin_left']; ?>px;
+            padding-right: <?php echo $print_settings['margin_right']; ?>px;
+            position: relative;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        
+        .dynamic-header {
+            text-align: center;
+            border-bottom: 2px solid var(--primary-color);
             padding-bottom: 15px;
             margin-bottom: 20px;
         }
-
-        .footer {
-            border-top: 1px solid #ccc;
-            margin-top: 50px;
+        
+        .dynamic-footer {
+            position: absolute;
+            bottom: <?php echo $print_settings['margin_bottom']; ?>px;
+            left: <?php echo $print_settings['margin_left']; ?>px;
+            right: <?php echo $print_settings['margin_right']; ?>px;
+            text-align: center;
+            border-top: 1px dashed #ccc;
             padding-top: 10px;
-            font-size: 12px;
         }
 
-        .rx-header {
+        .header-grid {
+            display: grid;
+            grid-template-columns: 32% 16% 28% 24%;
+            row-gap: 30px;
+            margin-bottom: 50px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #000;
+            text-transform: uppercase;
+            align-items: baseline;
+        }
+
+        .header-grid > div {
+            white-space: nowrap; /* Prevents awkward line breaks for IDs and Numbers */
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .vitals-row {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
+            margin-bottom: 30px; /* slightly more space after vitals */
+            font-weight: bold;
+            font-size: 14px; /* Slightly reduced to fit blood group */
+            text-transform: uppercase;
+        }
+
+        .vital-item {
+            margin-right: 25px; /* slightly less spacing for BG */
         }
 
         .rx-symbol {
-            font-size: 40px;
+            font-size: 38px; /* Reduced from 50px */
             font-weight: bold;
-            font-style: italic;
+            font-family: Arial, sans-serif;
+            margin-left: 130px; /* Shifted left slightly */
+            margin-top: 15px;
+        }
+
+        .footer-text {
+            position: absolute;
+            bottom: 1.0in; /* Exactly 1 inch from the bottom */
+            right: 40px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 15px; /* Increased from 13px */
+        }
+
+        /* Clean black text emphasizing */
+        strong, b {
+            font-weight: bold;
+            color: black;
         }
 
         @media print {
@@ -68,132 +155,92 @@ $meds = $med_stmt->fetchAll();
                 display: none;
             }
         }
+        
+        /* Print Button container style */
+        .controls {
+            margin-bottom: 10px;
+            background: #f4f4f4;
+            padding: 10px;
+            text-align: right;
+            border-bottom: 1px solid #ddd;
+        }
+        .controls button, .controls a {
+            padding: 8px 16px;
+            margin-left: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .controls a {
+            background-color: #6c757d;
+        }
+
     </style>
 </head>
 
-<body class="p-4">
+<body>
 
-    <div class="container border p-0">
-        <!-- Action Buttons -->
-        <div class="text-end p-3 no-print bg-light border-bottom">
-            <button onclick="window.print()" class="btn btn-primary btn-sm">🖨 Print Prescription</button>
-            <a href="opd.php" class="btn btn-secondary btn-sm">⬅ Back</a>
+    <div class="controls no-print">
+        <button onclick="window.print()">🖨 Print OPD Slip</button>
+        <a href="opd.php">⬅ Back</a>
+    </div>
+
+    <div class="print-container">
+        
+        <?php if (!empty($print_settings['header_text'])): ?>
+        <div class="dynamic-header">
+            <?php echo $print_settings['header_text']; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Unified Header Grid -->
+        <div class="header-grid">
+            <!-- Row 1 -->
+            <div>PATIENT ID _ <strong><?php echo $patient_id; ?></strong></div>
+            <div>TOKEN No. : <strong><?php echo $token_no; ?></strong></div>
+            <div>NAME : <?php echo $name; ?></div>
+            <div>GEN. <?php echo $gen; ?> &nbsp;&nbsp; AGE.<?php echo $age; ?></div>
+
+            <!-- Row 2 -->
+            <div style="grid-column: 1 / span 2;">MOBILE NO : <?php echo $mobile; ?></div>
+            <div></div> <!-- Empty cell for column 3 alignment -->
+            <div>DATE _ <strong><?php echo $date; ?></strong></div>
+
+            <!-- Row 3 -->
+            <div style="grid-column: 1 / span 2;">REF. BY - <strong><?php echo $ref_by; ?></strong></div>
+            <div>ADDRESS : <?php echo $address_part; ?></div>
+            <div>TIMING : <?php echo $time; ?></div>
         </div>
 
-        <!-- Header -->
-        <div class="p-4 border-bottom">
-            <div class="row align-items-center">
-                <div class="col-8">
-                    <div class="d-flex align-items-center">
-                        <img src="<?php echo APP_LOGO; ?>" alt="Logo" style="height: 90px; width: auto;" class="me-3">
-                        <div>
-                            <h2 class="fw-bold text-primary m-0" style="font-family: 'Times New Roman', serif;">
-                                <?php echo APP_NAME; ?></h2>
-                            <small class="text-dark d-block fw-bold"><?php echo APP_ADDRESS; ?></small>
-                            <small class="text-dark">📞 <?php echo APP_PHONE; ?> | ✉ <?php echo APP_EMAIL; ?></small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-4 text-end">
-                    <div class="border p-2 bg-light rounded">
-                        <h5 class="fw-bold text-primary mb-1">Dr. <?php echo $data['doctor_name']; ?></h5>
-                        <small>MBBS, MD (Medicine)</small><br>
-                        <small>Consultant Physician</small>
-                    </div>
-                </div>
-            </div>
+        <!-- Row 4 (Vitals) -->
+        <div class="vitals-row">
+            <div class="vital-item">BP <?php echo $bp; ?></div>
+            <div class="vital-item">SPO2 <?php echo $spo2; ?></div>
+            <div class="vital-item">PLUS <?php echo $plus; ?></div>
+            <div class="vital-item">HIGHT <?php echo $hight; ?></div>
+            <div class="vital-item">WAIGHT <?php echo $waight; ?></div>
+            <div class="vital-item" style="margin-right: 0;">BLOOD GROUP <?php echo $blood_group; ?></div>
         </div>
 
-        <!-- Patient Info -->
-        <div class="p-3 border-bottom bg-light">
-            <div class="row">
-                <div class="col-4">
-                    <strong>Patient Name:</strong> <?php echo $data['full_name']; ?><br>
-                    <strong>Age/Gender:</strong> <?php echo $data['age']; ?> Y / <?php echo $data['gender']; ?>
-                </div>
-                <div class="col-4">
-                    <strong>Address:</strong> <?php echo $data['p_address']; ?><br>
-                    <strong>Contact:</strong> <?php echo $data['phone'] ?: 'N/A'; ?>
-                </div>
-                <div class="col-4 text-end">
-                    <strong>Date:</strong> <?php echo date('d-M-Y', strtotime($data['visit_date'])); ?><br>
-                    <strong>OPD ID:</strong> <?php echo $data['token_number']; ?> | <strong>MR No:</strong>
-                    <?php echo $data['mr_number']; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Vitals Strip -->
-        <div class="p-2 border-bottom text-center bg-white">
-            <span class="mx-3"><strong>BP:</strong> <?php echo $data['bp'] ?: '--'; ?> mmHg</span> |
-            <span class="mx-3"><strong>Pulse:</strong> <?php echo $data['pulse'] ?: '--'; ?> bpm</span> |
-            <span class="mx-3"><strong>Temp:</strong> <?php echo $data['temperature'] ?: '--'; ?> °F</span> |
-            <span class="mx-3"><strong>Wt:</strong> <?php echo $data['weight'] ?: '--'; ?> kg</span>
-        </div>
-
-        <!-- Main Content -->
-        <div class="row p-4" style="min-height: 500px;">
-            <!-- Left Column: Symptoms/Diagnosis -->
-            <div class="col-4 border-end">
-                <div class="mb-4">
-                    <h6 class="fw-bold text-uppercase text-decoration-underline">Symptoms / Chief Complaints</h6>
-                    <p><?php echo nl2br($data['symptoms'] ?: 'As per patient history'); ?></p>
-                </div>
-                <div class="mb-4">
-                    <h6 class="fw-bold text-uppercase text-decoration-underline">Diagnosis</h6>
-                    <p><?php echo nl2br($data['diagnosis']); ?></p>
-                </div>
-                <div class="mb-4">
-                    <h6 class="fw-bold text-uppercase text-decoration-underline">Advice / Investigations</h6>
-                    <p><?php echo nl2br($data['advice']); ?></p>
-                </div>
-            </div>
-
-            <!-- Right Column: Rx -->
-            <div class="col-8 ps-4">
-                <h3 class="rx-symbol text-primary">Rx</h3>
-
-                <table class="table table-borderless table-striped mt-3">
-                    <thead class="border-bottom">
-                        <tr>
-                            <th width="40%">Medicine Name</th>
-                            <th>Dosage</th>
-                            <th>Duration</th>
-                            <th>Instruction</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($meds as $m): ?>
-                            <tr>
-                                <td class="fw-bold"><?php echo $m['medicine_name']; ?></td>
-                                <td><?php echo $m['dosage']; ?></td>
-                                <td><?php echo $m['duration']; ?></td>
-                                <td><small class="text-muted"><?php echo $m['instruction']; ?></small></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        <!-- Rx Section -->
+        <div>
+            <div class="rx-symbol">Rx</div>
         </div>
 
         <!-- Footer -->
-        <div class="p-4 border-top mt-auto">
-            <div class="row align-items-end">
-                <div class="col-6">
-                    <small class="text-muted">
-                        * Not valid for medico-legal purpose<br>
-                        * In case of emergency, contact immediately<br>
-                        * Please bring this prescription on next visit
-                    </small>
-                </div>
-                <div class="col-6 text-end">
-                    <img src="" alt="Signature" style="height: 50px; display: none;" class="mb-2">
-                    <p class="fw-bold border-top d-inline-block pt-2 px-5">Dr. <?php echo $data['doctor_name']; ?></p>
-                </div>
-            </div>
+        <div class="footer-text">
+            OPD VALID FOR 3 DAYS
         </div>
+        
+        <?php if (!empty($print_settings['footer_text'])): ?>
+        <div class="dynamic-footer">
+            <?php echo $print_settings['footer_text']; ?>
+        </div>
+        <?php endif; ?>
     </div>
 
 </body>
-
 </html>

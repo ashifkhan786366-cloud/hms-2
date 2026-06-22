@@ -12,6 +12,19 @@ if ($token !== $expected) {
 }
 
 try {
+    // Drop existing tables cascadingly to allow full clean schema rebuild
+    $dropTables = [
+        'ac_journal_items', 'ac_journal_entries', 'ac_accounts',
+        'bill_items', 'bills', 'prescription_tests', 'prescription_medicines',
+        'prescriptions', 'appointments', 'ipd_admissions', 'medicines',
+        'services', 'patients', 'users', 'daily_vouchers', 'daily_report_locks',
+        'bill_settings', 'hospital_settings'
+    ];
+    foreach ($dropTables as $table) {
+        $pdo->exec("DROP TABLE IF EXISTS $table CASCADE;");
+    }
+    echo "<p style='color:orange;font-family:sans-serif;padding:10px 20px;margin:5px 0;'>⚠️ Existing tables dropped successfully!</p>";
+
     // 1. Run main schema from file
     $schemaFile = __DIR__ . '/hms_schema_pg.sql';
     if (!file_exists($schemaFile)) {

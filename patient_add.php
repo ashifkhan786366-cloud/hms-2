@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $age = $_POST['age'];
     $phone = $_POST['phone'];
     $address = $_POST['address'];
-    $dob = $_POST['dob'];
+    $dob = !empty($_POST['dob']) ? trim($_POST['dob']) : null;
 
     // Generate MR Number (YearMonth-Random)
     $mr_number = "MR-" . date('ym') . "-" . rand(1000, 9999);
@@ -30,12 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$mr_number, $full_name, $gender, $age, $dob, $phone, $address, $photo_path]);
-        $success = "Patient registered successfully! MR Number: <strong>$mr_number</strong>";
-
-    // Redirect to View or OPD (Optional)
-    // header("Location: patients.php");
-    }
-    catch (PDOException $e) {
+        $new_patient_id = $pdo->lastInsertId(); // Get the ID for redirection
+        $success = true;
+    } catch (PDOException $e) {
         $error = "Error: " . $e->getMessage();
     }
 }
@@ -49,17 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <h4 class="mb-0"><i class="fas fa-user-plus"></i> New Patient Registration</h4>
                 </div>
                 <div class="card-body">
-                    <?php if ($success): ?>
-                        <div class="alert alert-success alert-dismissible fade show">
-                            <?php echo $success; ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <?php if (isset($success) && $success === true): ?>
+                        <div class="alert alert-success">
+                            Patient registered successfully! MR Number: <strong><?php echo $mr_number; ?></strong>
                         </div>
-                    <?php
-endif; ?>
+                    <?php endif; ?>
                     <?php if ($error): ?>
                         <div class="alert alert-danger"><?php echo $error; ?></div>
-                    <?php
-endif; ?>
+                    <?php endif; ?>
 
                     <form method="POST" enctype="multipart/form-data">
                         <div class="row mb-3">
@@ -113,5 +107,68 @@ endif; ?>
         </div>
     </div>
 </div>
+
+<?php if (isset($success) && $success === true): ?>
+<!-- Post Registration Action Modal -->
+<div class="modal fade" id="postRegModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="postRegModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+      <div class="modal-header bg-success text-white" style="border-top-left-radius: 15px; border-top-right-radius: 15px;">
+        <h5 class="modal-title" id="postRegModalLabel">
+            <i class="fas fa-check-circle me-2"></i> Registration Successful!
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center p-4">
+        <h4 class="mb-4 text-primary">Patient MR No: <strong><?php echo $mr_number; ?></strong></h4>
+        <p class="text-muted mb-4 fs-5">What is the category of this visit? Please select an action to proceed.</p>
+        
+        <div class="row g-3 justify-content-center">
+            <div class="col-md-6 col-lg-3">
+                <a href="opd.php?patient_id=<?php echo $new_patient_id; ?>&category=OPD" class="btn btn-outline-primary w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" style="border-radius: 12px; transition: all 0.3s;">
+                    <i class="fas fa-stethoscope fa-3x mb-2"></i>
+                    <span class="fs-5 fw-bold">OPD Consult</span>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <a href="opd.php?patient_id=<?php echo $new_patient_id; ?>&category=Injection" class="btn btn-outline-info w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" style="border-radius: 12px; transition: all 0.3s;">
+                    <i class="fas fa-syringe fa-3x mb-2"></i>
+                    <span class="fs-5 fw-bold">Injection Only</span>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <a href="opd.php?patient_id=<?php echo $new_patient_id; ?>&category=Dressing" class="btn btn-outline-warning w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" style="border-radius: 12px; transition: all 0.3s;">
+                    <i class="fas fa-band-aid fa-3x mb-2"></i>
+                    <span class="fs-5 fw-bold">Dressing</span>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <a href="opd.php?patient_id=<?php echo $new_patient_id; ?>&category=Other" class="btn btn-outline-secondary w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" style="border-radius: 12px; transition: all 0.3s;">
+                    <i class="fas fa-ellipsis-h fa-3x mb-2"></i>
+                    <span class="fs-5 fw-bold">Other</span>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3 mt-3 mt-lg-0">
+                <a href="billing.php?patient_id=<?php echo $new_patient_id; ?>" class="btn btn-outline-danger w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" style="border-radius: 12px; transition: all 0.3s;">
+                    <i class="fas fa-microscope fa-3x mb-2"></i>
+                    <span class="fs-5 fw-bold">Lab Bill</span>
+                </a>
+            </div>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-center border-0 pb-4">
+        <a href="patients.php" class="btn btn-light px-4">Skip & Go to Patient List</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var myModal = new bootstrap.Modal(document.getElementById('postRegModal'));
+        myModal.show();
+    });
+</script>
+<?php endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>

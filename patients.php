@@ -51,6 +51,7 @@ $total_pages = ceil($total_patients / $limit);
                             <th>Age/Gender</th>
                             <th>Phone</th>
                             <th>Address</th>
+                            <th>Registered On</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -63,9 +64,12 @@ $total_pages = ceil($total_patients / $limit);
                                 <td><?php echo $row['age']; ?> Y / <?php echo $row['gender']; ?></td>
                                 <td><?php echo $row['phone']; ?></td>
                                 <td><?php echo substr($row['address'], 0, 30) . '...'; ?></td>
+                                <td><span class="text-muted"><i class="far fa-calendar-alt"></i> <?php echo date('d-M-Y', strtotime($row['created_at'])); ?></span></td>
                                 <td>
-                                    <a href="patient_view.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-info text-white"><i class="fas fa-eye"></i> View</a>
-                                    <a href="opd.php?patient_id=<?php echo $row['id']; ?>" class="btn btn-sm btn-success"><i class="fas fa-stethoscope"></i> OPD</a>
+                                    <a href="patient_view.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-info text-white" title="View Details"><i class="fas fa-eye"></i> View</a>
+                                    <a href="patient_edit.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-warning" title="Edit Patient"><i class="fas fa-edit"></i> Edit</a>
+                                    <a href="opd.php?patient_id=<?php echo $row['id']; ?>" class="btn btn-sm btn-success" title="New OPD Visit"><i class="fas fa-stethoscope"></i> OPD</a>
+                                    <a href="billing_app.php?action=create&patient_id=<?php echo $row['id']; ?>" class="btn btn-sm btn-primary" title="Create Bill" style="background-color: #007bff;"><i class="fas fa-credit-card"></i> Bill</a>
                                 </td>
                             </tr>
                             <?php

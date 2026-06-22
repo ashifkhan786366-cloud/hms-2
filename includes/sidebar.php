@@ -26,11 +26,29 @@
         endif; ?>
 
         <?php if (in_array($_SESSION['role'], ['Admin', 'Receptionist', 'Accountant'])): ?>
-            <a href="billing.php" class="list-group-item list-group-item-action bg-dark text-white">
-                <i class="fas fa-file-invoice-dollar me-2"></i> Billing
+            <a href="billing_app.php?action=create" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-file-invoice-dollar me-2"></i> Create Marg Bill
+            </a>
+            <a href="billing_app.php?action=list" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-list me-2"></i> All Bills Register
+            </a>
+            <a href="billing_app.php?action=settings" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-cog me-2"></i> Marg Billing Settings
+            </a>
+            <a href="services.php" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-tags me-2"></i> Services & Items
+            </a>
+            <a href="tpa_companies.php" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-building me-2"></i> Corporate / TPA
+            </a>
+            <a href="treatment_packages.php" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-box me-2"></i> Treatment Packages
             </a>
             <a href="financials.php" class="list-group-item list-group-item-action bg-dark text-white">
                 <i class="fas fa-balance-scale me-2"></i> Financial Accounts
+            </a>
+            <a href="daily_report.php" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-chart-bar me-2"></i> Daily Collection Report
             </a>
             <?php
         endif; ?>
@@ -55,6 +73,9 @@
             </a>
             <a href="reports.php" class="list-group-item list-group-item-action bg-dark text-white">
                 <i class="fas fa-chart-line me-2"></i> Reports
+            </a>
+            <a href="setup_print.php" class="list-group-item list-group-item-action bg-dark text-white">
+                <i class="fas fa-print me-2"></i> Print Template Settings
             </a>
             <a href="settings.php" class="list-group-item list-group-item-action bg-dark text-white">
                 <i class="fas fa-cogs me-2"></i> Hospital Settings

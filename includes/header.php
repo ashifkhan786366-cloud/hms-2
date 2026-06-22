@@ -94,7 +94,7 @@ require_once __DIR__ . '/../config/db.php';
             min-width: 100vw;
         }
 
-        .wrapper.toggled #sidebar-wrapper {
+        #wrapper.toggled #sidebar-wrapper {
             margin-left: 0;
         }
 
@@ -108,7 +108,7 @@ require_once __DIR__ . '/../config/db.php';
                 width: 100%;
             }
 
-            .wrapper.toggled #sidebar-wrapper {
+            #wrapper.toggled #sidebar-wrapper {
                 margin-left: -15rem;
             }
         }

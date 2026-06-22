@@ -126,18 +126,30 @@ CREATE TABLE IF NOT EXISTS bills (
     net_amount        DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     paid_amount       DECIMAL(10,2) DEFAULT 0.00,
     payment_status    VARCHAR(20)   DEFAULT 'Pending' CHECK (payment_status IN ('Pending','Partial','Paid')),
-    payment_method    VARCHAR(20)   DEFAULT 'Cash'    CHECK (payment_method IN ('Cash','Card','UPI','Other')),
-    generated_by      INT           NOT NULL REFERENCES users(id)
+    payment_method    VARCHAR(20)   DEFAULT 'Cash'    CHECK (payment_method IN ('Cash','Card','UPI','Insurance','Split','Other')),
+    generated_by      INT           NOT NULL REFERENCES users(id),
+    payment_mode_cash DECIMAL(10,2) DEFAULT 0.00,
+    payment_mode_upi  DECIMAL(10,2) DEFAULT 0.00,
+    discount_type     VARCHAR(10)   DEFAULT 'amount',
+    discount_percent  DECIMAL(5,2)  DEFAULT 0.00,
+    last_edited_at    TIMESTAMP     DEFAULT NULL,
+    bill_type         VARCHAR(20)   DEFAULT 'OPD',
+    doctor_id         INT           DEFAULT NULL REFERENCES users(id),
+    balance_due       DECIMAL(10,2) DEFAULT 0.00,
+    created_at        TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Bill items table
 CREATE TABLE IF NOT EXISTS bill_items (
-    id           SERIAL PRIMARY KEY,
-    bill_id      INT           NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
-    service_name VARCHAR(100)  NOT NULL,
-    cost         DECIMAL(10,2) NOT NULL,
-    quantity     INT           DEFAULT 1,
-    amount       DECIMAL(10,2) NOT NULL
+    id               SERIAL PRIMARY KEY,
+    bill_id          INT           NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+    service_name     VARCHAR(100)  NOT NULL,
+    cost             DECIMAL(10,2) NOT NULL,
+    quantity         INT           DEFAULT 1,
+    amount           DECIMAL(10,2) NOT NULL,
+    item_type        VARCHAR(50)   DEFAULT 'General',
+    discount_percent DECIMAL(5,2)  DEFAULT 0.00,
+    report_status    VARCHAR(20)   DEFAULT NULL
 );
 
 -- Medicines table
@@ -156,3 +168,73 @@ INSERT INTO medicines (name, stock_qty, price_per_unit) VALUES
 ('Amoxicillin 500mg',  500,  10.00),
 ('Pantoprazole 40mg',  800,  8.00)
 ON CONFLICT DO NOTHING;
+
+-- Daily Collection Report System tables
+CREATE TABLE IF NOT EXISTS daily_vouchers (
+  id             SERIAL PRIMARY KEY,
+  voucher_number VARCHAR(40) NOT NULL UNIQUE,
+  voucher_date   DATE NOT NULL,
+  voucher_time   TIME NOT NULL,
+  voucher_type   VARCHAR(20) NOT NULL DEFAULT 'Payment' CHECK (voucher_type IN ('Receipt','Payment')),
+  staff_name     VARCHAR(100) DEFAULT NULL,
+  category       VARCHAR(80) DEFAULT 'Other',
+  purpose        TEXT NOT NULL,
+  amount         DECIMAL(10,2) NOT NULL,
+  payment_mode   VARCHAR(20) DEFAULT 'Cash' CHECK (payment_mode IN ('Cash','UPI','Bank Transfer','Other')),
+  reference_no   VARCHAR(60) DEFAULT NULL,
+  note           TEXT DEFAULT NULL,
+  created_by     INT DEFAULT NULL REFERENCES users(id),
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS daily_report_locks (
+  id          SERIAL PRIMARY KEY,
+  report_date DATE NOT NULL UNIQUE,
+  locked_by   INT DEFAULT NULL REFERENCES users(id),
+  locked_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Bill Settings table (instead of mysql bill_settings)
+CREATE TABLE IF NOT EXISTS bill_settings (
+    id          SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100) UNIQUE NOT NULL,
+    setting_value TEXT NULL
+);
+
+INSERT INTO bill_settings (setting_key, setting_value) VALUES
+('hospital_name', 'Sankhla Hospital'),
+('hospital_address', 'GOVT. DISS.NEAR KANJI PETROL PUMP,NEWARU ROAD,JHOTWARA,JAIPUR'),
+('hospital_phone', '9829208462'),
+('hospital_logo', ''),
+('bill_prefix', 'BILL'),
+('gst_number', ''),
+('enable_gst', '1'),
+('default_payment_mode', 'Cash'),
+('print_size', 'A4'),
+('primary_color', '#007bff'),
+('secondary_color', '#6c757d'),
+('header_text', 'Thank you for choosing Sankhla Hospital'),
+('footer_text', 'Terms & Conditions apply'),
+('show_discount_col', '1'),
+('show_tax_col', '1')
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- Hospital Settings (for dynamic config loaded in db.php)
+CREATE TABLE IF NOT EXISTS hospital_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100) UNIQUE NOT NULL,
+    setting_value TEXT NULL
+);
+
+INSERT INTO hospital_settings (setting_key, setting_value) VALUES
+('APP_NAME', 'SANKHLA HOSPITAL HEART & TRUMA CENTER'),
+('APP_SHORT_NAME', 'SANKHLA HOSPITAL'),
+('APP_ADDRESS', 'GOVT. DISS.NEAR KANJI PETROL PUMP,NEWARU ROAD,JHOTWARA,JAIPUR'),
+('APP_PHONE', '9829208462'),
+('APP_EMAIL', 'bksankhlahospital@gmail.com'),
+('APP_LOGO', 'assets/logo.png'),
+('CURRENCY', '₹'),
+('PRIMARY_COLOR', '#0066CC'),
+('SECONDARY_COLOR', '#2C2C2C'),
+('HEADER_FONT', '''Roboto'', Arial, sans-serif')
+ON CONFLICT (setting_key) DO NOTHING;

@@ -1,139 +1,91 @@
-# 🏥 Hospital Management System (HMS)
-### Sankhla Hospital - Jhotwara, Jaipur
+# Offline Hospital Management System (HMS)
 
-A complete, lightweight **Hospital Management System** built with **Plain PHP + MySQL**. Designed for XAMPP/WAMP local installations.
+## Overview
+A complete, lightweight, and offline-ready Hospital Management System built with Plain PHP and MySQL. Designed for easy installation on XAMPP/WAMP.
 
----
-
-## ✨ Features
-
-| Module | Description |
-|--------|-------------|
-| 🏠 **Dashboard** | Real-time stats - OPD, Revenue, IPD, New Patients |
-| 👤 **Patients** | Registration, MR Number, Photo Upload, EMR |
-| 🩺 **OPD** | Token system, Doctor consultation, Prescriptions |
-| 🛏️ **IPD** | Admissions, Ward/Bed management, Discharge |
-| 💊 **Pharmacy** | Medicine stock, Expiry tracking |
-| 🧪 **Laboratory** | Test orders, Result management |
-| 💰 **Billing** | GST-ready invoices, Print support, Payment tracking |
-| 📊 **Reports** | Daily, Monthly, Revenue reports |
-| 👥 **Users & Roles** | Admin, Doctor, Receptionist, Nurse, Lab Tech, Pharmacist |
-| ⚙️ **Settings** | Hospital info, Logo, Colors customization |
+## Features
+- **Dashboard**: Real-time hospital stats.
+- **Patient Registration**: EMR usage, Photo upload.
+- **OPD & Doctor Consultation**: Digital prescriptions.
+- **Billing**: GST-ready invoices with print support.
+- **IPD**: Admissions, Discharges.
+- **Pharmacy & Lab**: Stock and Test result management.
+- **Role-Based Access**: Admin, Doctor, Receptionist, etc.
 
 ---
 
-## 🚀 Quick Start (Local / XAMPP)
+## 🚀 Installation Steps
 
-### Step 1: Download & Setup
-```bash
-git clone https://github.com/YOUR_USERNAME/hms.git
-```
-1. Copy the `hms` folder to `C:\xampp\htdocs\hms\`
+### 1. Install XAMPP
+Download and install [XAMPP](https://www.apachefriends.org/) if you haven't already.
 
-### Step 2: Database Setup
-1. Start **Apache** & **MySQL** in XAMPP Control Panel
-2. Open: `http://localhost/phpmyadmin`
-3. Create database: **`hms_db`**
-4. Click **Import** → Select `hms_schema.sql` → Click **Go**
+### 2. Setup Project Files
+1. Go to your XAMPP installation directory (usually `C:\xampp\htdocs`).
+2. Create a folder named `hms`.
+3. Copy all the project files into `C:\xampp\htdocs\hms\`.
+   - Ensure the structure is:
+     ```
+     hms/
+     ├── assets/ (css, js, images)
+     ├── config/
+     ├── includes/
+     ├── uploads/
+     ├── index.php
+     ├── login.php
+     ... and other php files
+     ```
 
-### Step 3: Configure App
-```bash
-# Copy the example config
-cp config/db.example.php config/db.php
-```
-Edit `config/db.php` with your details:
-```php
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');          // Your MySQL password
-define('DB_NAME', 'hms_db');
-define('APP_NAME', 'YOUR HOSPITAL NAME');
-```
+### 3. Setup Database
+1. Start **Apache** and **MySQL** from XAMPP Control Panel.
+2. Open your browser and go to `http://localhost/phpmyadmin`.
+3. Create a new database named `hms_db`.
+4. Click **Import** tab.
+5. Choose the file `hms_schema.sql` (provided in the project root) and click **Go**.
 
-### Step 4: Run
-Open browser: **`http://localhost/hms`**
+### 4. Configure Offline Assets (Crucial)
+Since this system must run without internet, you need to download the following libraries and place them in the `assets` folder:
 
----
+1. **Bootstrap 5.3 CSS**:
+   - Download `bootstrap.min.css`
+   - Place in `assets/css/bootstrap.min.css`
+2. **FontAwesome (WebFree)**:
+   - Download the folder, rename `css/all.min.css` to `assets/css/all.min.css`.
+3. **jQuery**:
+   - Download `jquery.min.js`
+   - Place in `assets/js/jquery.min.js`
+4. **Bootstrap Bundle JS**:
+   - Download `bootstrap.bundle.min.js`
+   - Place in `assets/js/bootstrap.bundle.min.js`
+5. **Hospital Logo**:
+   - Place your logo image at `assets/logo.png`.
 
-## 🔐 Default Login Credentials
+*If you skip this, the design will look broken offline.*
 
-| Role | Username | Password |
-|------|----------|----------|
-| Admin | `admin` | `password` |
-| Doctor | `doctor` | `password` |
-| Reception | `reception` | `password` |
-
-> ⚠️ **IMPORTANT**: Change these passwords immediately after first login!
-
----
-
-## 📂 Project Structure
-
-```
-hms/
-├── config/
-│   ├── db.example.php    # Copy this to db.php
-│   └── db.php            # Your local config (gitignored)
-├── includes/
-│   ├── header.php        # Common header + sidebar
-│   ├── footer.php        # Scripts footer
-│   ├── sidebar.php       # Navigation sidebar
-│   └── auth_check.php    # Login protection
-├── assets/
-│   ├── css/              # Bootstrap + FontAwesome (offline)
-│   ├── js/               # jQuery + Bootstrap JS (offline)
-│   └── logo.png          # Hospital logo
-├── uploads/              # Patient photos (gitignored)
-├── hms_schema.sql        # Full database schema + demo data
-├── index.php             # Dashboard
-├── patients.php          # Patient management
-├── opd.php               # OPD registration
-├── ipd.php               # IPD admissions
-├── billing.php           # Billing module
-├── laboratory.php        # Lab management
-├── pharmacy.php          # Pharmacy stock
-├── reports.php           # Reports
-├── settings.php          # Hospital settings
-└── users.php             # User management
-```
+### 5. Run the Application
+1. Open browser: `http://localhost/hms`
+2. **Login Credentials**:
+   - **Admin**: `admin` / `password`
+   - **Doctor**: `doctor` / `password`
+   - **Reception**: `reception` / `password`
 
 ---
 
 ## 🎨 Customization
+To change Hospital Name, Address, or Colors:
+1. Open `config/db.php`.
+2. Edit the constants at the bottom:
+   ```php
+   define('APP_NAME', 'YOUR HOSPITAL NAME');
+   define('APP_ADDRESS', 'Your Address...');
+   define('PRIMARY_COLOR', '#0066CC'); // Change Theme Color
+   ```
 
-Edit `config/db.php` to change:
-```php
-define('APP_NAME', 'YOUR HOSPITAL NAME');
-define('APP_ADDRESS', 'Your Full Address');
-define('APP_PHONE', '9999999999');
-define('APP_EMAIL', 'email@hospital.com');
-define('PRIMARY_COLOR', '#0066CC');  // Theme color
-```
-
----
-
-## 🛠️ Tech Stack
-
-- **Backend**: PHP 7.4+ (PDO)
-- **Database**: MySQL 5.7+ / MariaDB
-- **Frontend**: Bootstrap 5.3, jQuery, FontAwesome 6
-- **Offline Ready**: All assets bundled locally
+## 📂 Folder Structure
+- `config/` - Database connection.
+- `includes/` - Header, Footer, Sidebar, Auth checks.
+- `uploads/` - Patient photos.
+- `assets/` - CSS/JS files.
 
 ---
 
-## 📋 Requirements
-
-- XAMPP / WAMP / LAMP
-- PHP 7.4 or higher
-- MySQL 5.7+ / MariaDB 10+
-- Web Browser (Chrome/Firefox recommended)
-
----
-
-## 📄 License
-
-This project is for private hospital use. All rights reserved.
-
----
-
-**Developed for Sankhla Hospital | Jhotwara, Jaipur** 🏥
+**Developed for Offline Use | Plain PHP**

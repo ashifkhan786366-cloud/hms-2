@@ -1,4 +1,5 @@
 <?php
+require_once 'config/db.php';
 require_once 'includes/auth_check.php';
 require_once 'includes/header.php';
 
@@ -22,6 +23,22 @@ $history = $app_stmt->fetchAll();
 $bill_stmt = $pdo->prepare("SELECT * FROM bills WHERE patient_id = ? ORDER BY bill_date DESC");
 $bill_stmt->execute([$pid]);
 $bills = $bill_stmt->fetchAll();
+
+// Fetch Lab History
+$lab_stmt = $pdo->prepare("
+    SELECT bi.*, b.bill_date 
+    FROM bill_items bi 
+    JOIN bills b ON bi.bill_id = b.id 
+    WHERE b.patient_id = ? AND bi.report_status IN ('Pending', 'Completed') 
+    ORDER BY b.bill_date DESC
+");
+$lab_stmt->execute([$pid]);
+$labs = $lab_stmt->fetchAll();
+
+// Fetch IPD History
+$ipd_stmt = $pdo->prepare("SELECT * FROM ipd_admissions WHERE patient_id = ? ORDER BY admission_date DESC");
+$ipd_stmt->execute([$pid]);
+$ipd_history = $ipd_stmt->fetchAll();
 ?>
 
 <div class="container-fluid mt-4">
@@ -54,10 +71,16 @@ endif; ?>
     <!-- Tabs for EMR -->
     <ul class="nav nav-tabs" id="emrTab" role="tablist">
         <li class="nav-item">
-            <a class="nav-link active" id="visits-tab" data-bs-toggle="tab" href="#visits" role="tab">Visit History</a>
+            <a class="nav-link active" id="visits-tab" data-bs-toggle="tab" href="#visits" role="tab"><i class="fas fa-stethoscope"></i> OPD Visits</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" id="bills-tab" data-bs-toggle="tab" href="#bills" role="tab">Billing History</a>
+            <a class="nav-link" id="ipd-tab" data-bs-toggle="tab" href="#ipd" role="tab"><i class="fas fa-procedures"></i> IPD History</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="lab-tab" data-bs-toggle="tab" href="#lab" role="tab"><i class="fas fa-flask"></i> Lab Investigations</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="bills-tab" data-bs-toggle="tab" href="#bills" role="tab"><i class="fas fa-file-invoice-dollar"></i> Billing History</a>
         </li>
     </ul>
 
@@ -101,23 +124,125 @@ endforeach; ?>
                         <th>Bill No</th>
                         <th>Date</th>
                         <th>Amount</th>
+                        <th>Paid</th>
+                        <th>Balance Due</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($bills as $b): ?>
+                    <?php if (count($bills) > 0): ?>
+                        <?php foreach ($bills as $b):
+                            $isPending = in_array($b['payment_status'] ?? '', ['Pending', 'Partial']);
+                            $balanceDue = (float)($b['net_amount'] ?? 0) - (float)($b['paid_amount'] ?? 0);
+                        ?>
+                        <tr class="<?= $isPending ? 'table-warning' : '' ?>">
+                            <td><strong><?= htmlspecialchars($b['bill_number']) ?></strong></td>
+                            <td><?= !empty($b['bill_date']) ? date('d/m/Y', strtotime($b['bill_date'])) : '—' ?></td>
+                            <td>₹<?= number_format((float)$b['net_amount'], 2) ?></td>
+                            <td>₹<?= number_format((float)($b['paid_amount'] ?? 0), 2) ?></td>
+                            <td class="<?= $balanceDue > 0 ? 'text-danger fw-bold' : 'text-success' ?>">
+                                ₹<?= number_format($balanceDue, 2) ?>
+                            </td>
+                            <td>
+                                <span class="badge bg-<?= ($b['payment_status'] === 'Paid') ? 'success' : (($b['payment_status'] === 'Partial') ? 'warning text-dark' : 'danger') ?>">
+                                    <?= htmlspecialchars($b['payment_status'] ?? 'Pending') ?>
+                                </span>
+                            </td>
+                            <td class="d-flex gap-1 flex-wrap">
+                                <a href="bill_print.php?id=<?= $b['id'] ?>" target="_blank"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-print"></i> Invoice
+                                </a>
+                                 <a href="bill_modify.php?id=<?= $b['id'] ?>"
+                                    class="btn btn-sm btn-warning"
+                                    title="Modify this bill — change items, amounts, payment">
+                                     <i class="fas fa-edit"></i> Modify
+                                 </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php
+                        // Total due footer row
+                        $totalDue = array_sum(array_map(fn($b) =>
+                            max(0, (float)($b['net_amount'] ?? 0) - (float)($b['paid_amount'] ?? 0)), $bills));
+                        if ($totalDue > 0): ?>
+                        <tr class="table-danger">
+                            <td colspan="4" class="text-end fw-bold">Total Outstanding Balance:</td>
+                            <td class="fw-bold text-danger">₹<?= number_format($totalDue, 2) ?></td>
+                            <td colspan="2"></td>
+                        </tr>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <tr><td colspan="7" class="text-center">No billing history found.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+
+        <!-- IPD History Tab -->
+        <div class="tab-pane fade" id="ipd" role="tabpanel">
+            <table class="table table-hover">
+                <thead>
                     <tr>
-                        <td><?php echo $b['bill_number']; ?></td>
-                        <td><?php echo $b['bill_date']; ?></td>
-                        <td><?php echo CURRENCY . $b['net_amount']; ?></td>
-                        <td><span class="badge bg-<?php echo($b['payment_status'] == 'Paid') ? 'success' : 'warning'; ?>"><?php echo $b['payment_status']; ?></span></td>
-                        <td>
-                            <a href="bill_print.php?id=<?php echo $b['id']; ?>" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-print"></i> Invoice</a>
-                        </td>
+                        <th>Admission Date</th>
+                        <th>Discharge Date</th>
+                        <th>Ward/Bed</th>
+                        <th>Consultant</th>
+                        <th>Status</th>
                     </tr>
-                    <?php
-endforeach; ?>
+                </thead>
+                <tbody>
+                    <?php if (count($ipd_history) > 0): ?>
+                        <?php foreach ($ipd_history as $ih): ?>
+                        <tr>
+                            <td><?php echo $ih['admission_date']; ?></td>
+                            <td><?php echo $ih['discharge_date'] ?: '-'; ?></td>
+                            <td><?php echo htmlspecialchars($ih['ward_bed']); ?></td>
+                            <td><?php echo htmlspecialchars($ih['consultant']); ?></td>
+                            <td>
+                                <span class="badge bg-<?php echo ($ih['status'] == 'Discharged') ? 'secondary' : 'warning'; ?>">
+                                    <?php echo htmlspecialchars($ih['status']); ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr><td colspan="5" class="text-center">No IPD history found.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Lab Investigations Tab -->
+        <div class="tab-pane fade" id="lab" role="tabpanel">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Test Name</th>
+                        <th>Result</th>
+                        <th>Report Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (count($labs) > 0): ?>
+                        <?php foreach ($labs as $l): ?>
+                        <tr>
+                            <td><?php echo date('Y-m-d', strtotime($l['bill_date'])); ?></td>
+                            <td><?php echo htmlspecialchars($l['service_name']); ?></td>
+                            <td><?php echo htmlspecialchars($l['lab_result']) ?: '<span class="text-muted">Not uploaded</span>'; ?></td>
+                            <td>
+                                <span class="badge bg-<?php echo ($l['report_status'] == 'Completed') ? 'success' : 'warning'; ?>">
+                                    <?php echo htmlspecialchars($l['report_status']); ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr><td colspan="4" class="text-center">No lab investigations found.</td></tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
