@@ -29,6 +29,10 @@ RUN { \
 # Copy application files
 COPY . /var/www/html/
 
+# Copy entrypoint script and make it executable
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Fix permissions
 RUN chown -R www-data:www-data /var/www/html \
     && find /var/www/html -type d -exec chmod 755 {} \; \
@@ -36,4 +40,4 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod 775 /var/www/html/uploads
 
 EXPOSE 80
-CMD ["apache2-foreground"]
+ENTRYPOINT ["/entrypoint.sh"]
