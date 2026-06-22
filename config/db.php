@@ -11,31 +11,40 @@ $max_retries = 3;
 $retry_delay = 2;
 $pdo = null;
 
+// Determine driver: If DB_HOST contains aivencloud.com or DB_PORT is not 3306, we use pgsql
+$is_pgsql = (strpos(DB_HOST, 'aivencloud.com') !== false || DB_PORT !== '3306');
+
 for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
       try {
-                $pdo = new PDO(
-                              "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4",
-                              DB_USER,
-                              DB_PASS,
-                              [
-                                  PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                                  PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                              ]
-                          );
-                break;
+            if ($is_pgsql) {
+                // PostgreSQL: Aiven connection (requires SSL)
+                $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";sslmode=require";
+                $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ]);
+            } else {
+                // MySQL: Localhost or Railway connection
+                $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+                $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ]);
+            }
+            break;
       } catch (PDOException $e) {
-                if ($attempt === $max_retries) {
-                              die("<div style='font-family:sans-serif;padding:20px;color:#c0392b;'>
-                                              <h2>Database Connection Error</h2>
-                                                              <p>MySQL connection failed. Please check:</p>
-                                                                              <ul>
-                                                                                                  <li>Database server is running?</li>
-                                                                                                                      <li>Credentials are correct?</li>
-                                                                                                                                      </ul>
-                                                                                                                                                      <small>Error: " . htmlspecialchars($e->getMessage()) . "</small>
-                                                                                                                                                                  </div>");
-                }
-                sleep($retry_delay);
+            if ($attempt === $max_retries) {
+                  die("<div style='font-family:sans-serif;padding:20px;color:#c0392b;'>
+                        <h2>Database Connection Error</h2>
+                        <p>Connection failed. Please check:</p>
+                        <ul>
+                              <li>Database server is running?</li>
+                              <li>Credentials are correct?</li>
+                        </ul>
+                        <small>Error: " . htmlspecialchars($e->getMessage()) . "</small>
+                        </div>");
+            }
+            sleep($retry_delay);
       }
 }
 
