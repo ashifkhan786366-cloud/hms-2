@@ -5,7 +5,7 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     region: oregon
-    healthCheckPath: /login.php
+    healthCheckPath: /empty.txt
     autoDeploy: true
     envVars:
       # ── Aiven PostgreSQL ──
