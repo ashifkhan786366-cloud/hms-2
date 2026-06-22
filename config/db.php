@@ -1,10 +1,10 @@
 <?php
 // Database Configuration
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
-define('DB_NAME', getenv('DB_NAME') ?: 'hms_db');
-define('DB_PORT', getenv('DB_PORT') ?: '3306');
+define('DB_HOST', trim(getenv('DB_HOST') ?: 'localhost'));
+define('DB_USER', trim(getenv('DB_USER') ?: 'root'));
+define('DB_PASS', getenv('DB_PASS') !== false ? trim(getenv('DB_PASS')) : '');
+define('DB_NAME', trim(getenv('DB_NAME') ?: 'hms_db'));
+define('DB_PORT', trim(getenv('DB_PORT') ?: '3306'));
 
 // Connection retry logic: 3 attempts
 $max_retries = 3;
